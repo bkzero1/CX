@@ -1,7 +1,14 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "CXUI.h"
+#include "UI/ChatUI.h"
+
+void UCXUI::OnNewChatMessage(const FString& InSender, const FString& InMessage)
+{
+	// HUD가 받은 발신자와 본문을 채팅 위젯에 그대로 넘깁니다.
+	UI_Chat->OnNewChatMessage(InSender, InMessage);
+}
 
 void UCXUI::UpdateSpeed(float NewSpeed)
 {

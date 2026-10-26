@@ -1,11 +1,20 @@
-// ChatUI.cpp
+﻿// ChatUI.cpp
 
 #include "UI/ChatUI.h"
 #include "CXPlayerController.h"
 
-void UChatUI::OnNewChatMessage(const FString Sender, const FString Message)
+void UChatUI::OnNewChatMessage(const FString& InSender, const FString& InMessage)
 {
-	// 채팅 기록 표시는 이후 단계에서 구현합니다.
+	// 이번에 받은 메시지를 '발신자: 본문' 형태로 만듭니다.
+	FString NewMessage = InSender + TEXT(": ") + InMessage;
+
+	// 기존 기록에 줄바꿈을 붙여 새 메시지가 다음 줄에 오게 합니다.
+	FString OldMessage = MultiLineEditableTextBox_ChatLog->GetText().ToString();
+	OldMessage += TEXT("\n");
+
+	// 합친 기록을 화면 표시용 FText로 변환하여 반영합니다.
+	FText Message = FText::FromString(OldMessage + NewMessage);
+	MultiLineEditableTextBox_ChatLog->SetText(Message);
 }
 
 void UChatUI::NativeConstruct()

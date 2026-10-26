@@ -1,4 +1,4 @@
-// ChatUI.h
+﻿// ChatUI.h
 
 #pragma once
 
@@ -15,8 +15,8 @@ class CX_API UChatUI : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// 수신한 채팅을 기록창에 표시할 함수입니다. 실제 처리는 이후에 연결합니다.
-	void OnNewChatMessage(const FString Sender, const FString Message);
+	// 수신한 발신자와 본문을 채팅 기록에 추가합니다.
+	void OnNewChatMessage(const FString& InSender, const FString& InMessage);
 
 protected:
 	// 위젯의 입력 이벤트를 연결하고 해제할 시점입니다.

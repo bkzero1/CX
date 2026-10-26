@@ -1,4 +1,4 @@
-// CXPlayerController.cpp
+﻿// CXPlayerController.cpp
 
 
 #include "CXPlayerController.h"
@@ -93,6 +93,7 @@ void ACXPlayerController::CTS_ChatMessage_Implementation(const FString& Message)
 
 void ACXPlayerController::STC_ChatMessage_Implementation(const FString& Sender, const FString& Message)
 {
-	// 클라이언트 수신을 확인합니다. 위젯의 기록 표시는 다음 단계입니다.
+	// 수신 내용을 로그로 확인하고, 이 플레이어의 HUD에도 전달합니다.
 	UE_LOG(LogTemp, Log, TEXT("Client received chat: %s: %s"), *Sender, *Message);
+	VehicleUI->OnNewChatMessage(Sender, Message);
 }
