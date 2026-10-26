@@ -21,6 +21,10 @@ public:
 	int32 GetCoins() const;
 	float GetBonusMaxSpeed() const;
 
+	// HUD 텍스트 바인딩에서 현재 자원을 표시할 문자열을 읽습니다.
+	UFUNCTION(BlueprintCallable, Category = "Player Resources")
+	FString GetPlayerStateInfo() const;
+
 	void AddCoins(int32 Amount);
 
 	bool TryRemoveCoins(int32 Amount);

@@ -5,10 +5,14 @@
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
+#include "PlayerState/CXPlayerState.h"
 
 ACXGameMode::ACXGameMode()
 {
 	PlayerControllerClass = ACXPlayerController::StaticClass();
+
+	// 플레이어별 자원을 관리할 PlayerState 클래스를 지정합니다.
+	PlayerStateClass = ACXPlayerState::StaticClass();
 }
 
 AActor* ACXGameMode::ChoosePlayerStart_Implementation(AController* Player)

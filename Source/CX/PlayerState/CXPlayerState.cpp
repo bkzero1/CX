@@ -55,3 +55,8 @@ float ACXPlayerState::GetBonusMaxSpeed() const
 {
 	return BonusMaxSpeed;
 }
+
+FString ACXPlayerState::GetPlayerStateInfo() const
+{
+	return FString::Printf(TEXT("Coins: %d | Bonus Speed: %.1f"), Coins, BonusMaxSpeed);
+}
