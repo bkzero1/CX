@@ -9,6 +9,10 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "InputAction.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Engine/World.h"
+#include "CollisionQueryParams.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
@@ -17,6 +21,14 @@ DEFINE_LOG_CATEGORY(LogTemplateVehicle);
 
 ACXPawn::ACXPawn()
 {
+	// 모든 차량이 같은 공격 액션을 사용하도록 코드에서 연결합니다.
+	static ConstructorHelpers::FObjectFinder<UInputAction> AttackActionAsset(
+		TEXT("/Game/VehicleTemplate/Input/Actions/IA_Attack.IA_Attack"));
+	if (AttackActionAsset.Succeeded())
+	{
+		AttackAction = AttackActionAsset.Object;
+	}
+
 	// construct the front camera boom
 	FrontSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Front Spring Arm"));
 	FrontSpringArm->SetupAttachment(GetMesh());
@@ -85,6 +97,16 @@ void ACXPawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputCompon
 
 		// reset the vehicle 
 		EnhancedInputComponent->BindAction(ResetVehicleAction, ETriggerEvent::Triggered, this, &ACXPawn::ResetVehicle);
+
+		// 라이브 세션과 같은 Triggered 연결입니다.
+		if (IsValid(AttackAction))
+		{
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ACXPawn::InputAttack);
+		}
+		else
+		{
+			UE_LOG(LogTemplateVehicle, Warning, TEXT("AttackAction is not assigned: %s"), *GetName());
+		}
 	}
 	else
 	{
@@ -202,6 +224,31 @@ void ACXPawn::ResetVehicle(const FInputActionValue& Value)
 	GetMesh()->SetPhysicsLinearVelocity(FVector::ZeroVector);
 
 	UE_LOG(LogTemplateVehicle, Error, TEXT("Reset Vehicle"));
+}
+
+void ACXPawn::InputAttack(const FInputActionValue& Value)
+{
+	CTSAttack();
+}
+
+void ACXPawn::CTSAttack_Implementation()
+{
+	// 라이브 세션의 첫 검증 단계: 액터 위치에서 전방 700cm를 검사합니다.
+	// 제출 전에는 시작점을 앞 범퍼 중앙으로 조정합니다.
+	const FVector Start = GetActorLocation();
+	const FVector End = Start + GetActorForwardVector() * 700.0f;
+
+	// 자기 차량을 맞히지 않도록 검사 대상에서 제외합니다.
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	FHitResult HitResult;
+	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
+	{
+		// 아직 코인은 변경하지 않고, 서버가 찾은 명중 대상만 기록합니다.
+		UE_LOG(LogTemplateVehicle, Log, TEXT("[AttackHit][Server] %s -> %s"),
+			*GetName(), *GetNameSafe(HitResult.GetActor()));
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

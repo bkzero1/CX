@@ -75,6 +75,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
 	UInputAction* ResetVehicleAction;
 
+	// 생성자에서 기본 액션을 연결하고, 차량 BP에서 변경할 수 있습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	UInputAction* AttackAction = nullptr;
+
 	/** Keeps track of which camera is active */
 	bool bFrontCameraActive = false;
 
@@ -120,6 +124,12 @@ protected:
 
 	/** Handles reset vehicle input */
 	void ResetVehicle(const FInputActionValue& Value);
+
+	// 로컬 공격 입력을 서버로 전달합니다.
+	void InputAttack(const FInputActionValue& Value);
+
+	UFUNCTION(Server, Reliable)
+	void CTSAttack();
 
 	/** Called when the brake lights are turned on or off */
 	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
