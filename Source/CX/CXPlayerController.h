@@ -24,6 +24,13 @@ class CX_API ACXPlayerController : public APlayerController
 
 protected:
 
+	// 임시 복제 테스트: 확인 후 이 선언과 구현을 제거합니다.
+	UFUNCTION(Exec)
+	void TestAddCoins(int32 Amount);
+
+	UFUNCTION(Server, Reliable)
+	void CTS_TestAddCoins(int32 Amount);
+
 	// 소유 클라이언트가 입력한 채팅을 서버로 전달합니다.
 	UFUNCTION(Server, Reliable)
 	void CTS_ChatMessage(const FString& Message);

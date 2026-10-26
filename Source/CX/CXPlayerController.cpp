@@ -9,6 +9,7 @@
 #include "Net/UnrealNetwork.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerState.h"
+#include "PlayerState/CXPlayerState.h"
 
 void ACXPlayerController::BeginPlay()
 {
@@ -96,4 +97,37 @@ void ACXPlayerController::STC_ChatMessage_Implementation(const FString& Sender, 
 	// 수신 내용을 로그로 확인하고, 이 플레이어의 HUD에도 전달합니다.
 	UE_LOG(LogTemp, Log, TEXT("Client received chat: %s: %s"), *Sender, *Message);
 	VehicleUI->OnNewChatMessage(Sender, Message);
+}
+
+// 임시 복제 테스트: 실행 확인 후 제거합니다.
+void ACXPlayerController::TestAddCoins(int32 Amount)
+{
+#if !UE_BUILD_SHIPPING && !UE_BUILD_TEST
+	if (IsLocalController() && Amount > 0)
+	{
+		CTS_TestAddCoins(Amount);
+	}
+#endif
+}
+
+void ACXPlayerController::CTS_TestAddCoins_Implementation(int32 Amount)
+{
+#if !UE_BUILD_SHIPPING && !UE_BUILD_TEST
+	ACXPlayerState* CXPlayerState = GetPlayerState<ACXPlayerState>();
+	if (!IsValid(CXPlayerState) || Amount <= 0)
+	{
+		return;
+	}
+
+	const int32 BeforeCoins = CXPlayerState->GetCoins();
+	if (BeforeCoins > MAX_int32 - Amount)
+	{
+		return;
+	}
+
+	// 기존 서버 전용 함수를 호출하고 변경 전후를 기록합니다.
+	CXPlayerState->AddCoins(Amount);
+	UE_LOG(LogTemp, Log, TEXT("[TempCoinTest][Server] %s: %d -> %d"),
+		*CXPlayerState->GetPlayerName(), BeforeCoins, CXPlayerState->GetCoins());
+#endif
 }
