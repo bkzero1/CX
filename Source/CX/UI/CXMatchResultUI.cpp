@@ -2,12 +2,15 @@
 
 #include "UI/CXMatchResultUI.h"
 #include "Components/Button.h"
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
 #include "CXPlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 void UCXMatchResultUI::NativeConstruct()
 {
 	Super::NativeConstruct();
+	SetIsFocusable(true);
 
 	// 같은 위젯을 다시 표시해도 동일한 클릭 함수가 중복 등록되지 않게 합니다.
 	if (IsValid(RestartButton))
@@ -18,6 +21,23 @@ void UCXMatchResultUI::NativeConstruct()
 	{
 		QuitButton->OnClicked.AddUniqueDynamic(this, &ThisClass::OnQuitButtonClicked);
 	}
+}
+
+FReply UCXMatchResultUI::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// 버튼에 포커스가 있어도 Enter는 버튼 실행보다 채팅 시작을 우선합니다.
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		if (InKeyEvent.IsRepeat() == false)
+		{
+			if (ACXPlayerController* PlayerController = GetOwningPlayer<ACXPlayerController>())
+			{
+				PlayerController->BeginChatInput();
+			}
+		}
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
 }
 
 void UCXMatchResultUI::OnRestartButtonClicked()

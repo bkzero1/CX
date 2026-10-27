@@ -14,6 +14,8 @@
 #include "Blueprint/UserWidget.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/World.h"
+#include "Components/InputComponent.h"
+#include "InputCoreTypes.h"
 
 ACXPlayerController::ACXPlayerController()
 {
@@ -56,6 +58,9 @@ void ACXPlayerController::BeginPlay()
 void ACXPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+
+	// 채팅 시작 단축키는 컨트롤러가 받습니다. 입력창 안의 Enter는 위젯이 처리합니다.
+	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ThisClass::BeginChatInput);
 	
 	// get the enhanced input subsystem
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
@@ -69,6 +74,40 @@ void ACXPlayerController::SetupInputComponent()
 			Subsystem->AddMappingContext(SteeringWheelInputMappingContext, 1);
 		}
 	}
+}
+
+void ACXPlayerController::BeginChatInput()
+{
+	if (IsLocalController() == false || IsValid(VehicleUI) == false)
+	{
+		return;
+	}
+
+	// 누른 채로 채팅을 열었던 이동 키가 계속 눌린 상태로 남지 않게 해제합니다.
+	FlushPressedKeys();
+	VehicleUI->FocusChatInput();
+}
+
+void ACXPlayerController::FinishChatInput()
+{
+	if (IsLocalController() == false)
+	{
+		return;
+	}
+
+	if (IsValid(MatchResultWidget))
+	{
+		// 결과창으로 복귀하고, 다음 Enter도 결과 위젯이 받도록 포커스를 줍니다.
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(MatchResultWidget->TakeWidget());
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		return;
+	}
+
+	SetInputMode(FInputModeGameOnly());
+	bShowMouseCursor = false;
 }
 
 void ACXPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -144,11 +183,14 @@ void ACXPlayerController::ShowMatchResult()
 		return;
 	}
 	MatchResultWidget->AddToViewport(100);
+	if (IsValid(VehicleUI))
+	{
+		// 결과창은 유지하고, 기존 채팅 영역만 그 위에 표시합니다.
+		VehicleUI->ShowChatOverResult();
+	}
 
-	FInputModeUIOnly InputMode;
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	SetInputMode(InputMode);
-	bShowMouseCursor = true;
+	// 최초 표시와 채팅 종료가 같은 결과창 포커스 설정을 사용합니다.
+	FinishChatInput();
 }
 
 void ACXPlayerController::RequestMatchRestart()

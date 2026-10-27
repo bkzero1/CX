@@ -30,6 +30,12 @@ protected:
 	bool bIsMPH = false;
 
 public:
+	// 내부 채팅 위젯에 키보드 입력을 넘깁니다.
+	void FocusChatInput();
+
+	// 경기 종료 후에는 채팅만 남겨 결과창 위에 표시합니다.
+	void ShowChatOverResult();
+
 	// 수신한 메시지를 내부 채팅 위젯으로 전달합니다.
 	void OnNewChatMessage(const FString& InSender, const FString& InMessage);
 

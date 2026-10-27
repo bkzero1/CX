@@ -24,6 +24,12 @@ public:
 	ACXPlayerController();
 	void ShowMatchResult();
 
+	// 게임 화면과 결과 위젯에서 함께 사용하는 채팅 진입점입니다.
+	void BeginChatInput();
+
+	// 채팅 전송/취소 후 현재 경기 상태에 맞는 화면으로 복귀합니다.
+	void FinishChatInput();
+
 	// 결과 위젯의 버튼이 자기 컨트롤러를 통해 서버에 재시작을 요청합니다.
 	UFUNCTION(BlueprintCallable, Category = "Match")
 	void RequestMatchRestart();

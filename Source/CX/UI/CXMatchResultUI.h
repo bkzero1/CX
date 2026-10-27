@@ -16,6 +16,7 @@ class CX_API UCXMatchResultUI : public UUserWidget
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	// 파생 BP에 같은 이름의 Button이 있어야 연결됩니다.
 	UPROPERTY(BlueprintReadOnly, Category = "Match Result", meta = (BindWidget))
