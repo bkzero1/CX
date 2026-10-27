@@ -8,6 +8,7 @@
 #include "PlayerState/CXPlayerState.h"
 #include "GameState/CXGameState.h"
 #include "TimerManager.h"
+#include "Item/CXItemSpawner.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogCXCountdown, Log, All);
 
@@ -85,6 +86,11 @@ void ACXGameMode::StartPlayingState()
 	}
 
 	CXGameState->SetGameState(EGameState::Playing);
+	// 상태를 먼저 바꾼 뒤 서버에서 배치된 스포너의 첫 생성을 시작합니다.
+	for (TActorIterator<ACXItemSpawner> It(GetWorld()); It; ++It)
+	{
+		It->StartSpawning();
+	}
 	// 라이브 세션과 동일하게 우선 30초로 경기 흐름을 확인합니다.
 	CXGameState->SetRemainingTime(30);
 	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &ACXGameMode::HandlePlayingTimerTick, 1.0f, true);
@@ -149,6 +155,10 @@ void ACXGameMode::FinishGame()
 	CXGameState->SetWinners(MatchWinners);
 	CXGameState->SetRemainingTime(0);
 	CXGameState->SetGameState(EGameState::Finished);
+	for (TActorIterator<ACXItemSpawner> It(GetWorld()); It; ++It)
+	{
+		It->StopSpawning();
+	}
 
 	// 서버 판정 확인용 로그입니다. 결과 UI는 다음 단계에서 연결합니다.
 	UE_LOG(LogCXCountdown, Log, TEXT("[MatchResult] HighestCoins=%d, WinnerCount=%d"), HighestCoins, MatchWinners.Num());

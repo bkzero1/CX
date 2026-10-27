@@ -2,6 +2,7 @@
 #include "Item/CXCoinItem.h"
 #include "Components/BillboardComponent.h"
 #include "Engine/World.h"
+#include "GameState/CXGameState.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACXItemSpawner::ACXItemSpawner()
@@ -30,7 +31,25 @@ void ACXItemSpawner::BeginPlay()
 
 	if (HasAuthority())
 	{
-		SpawnItem();
+		// 경기 중 늦게 로드된 스포너도 처리합니다. 대기 중이면 생성하지 않습니다.
+		StartSpawning();
+	}
+}
+
+void ACXItemSpawner::StartSpawning()
+{
+	SpawnItem();
+}
+
+void ACXItemSpawner::StopSpawning()
+{
+	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
+	if (HasAuthority() && IsValid(SpawnedItem))
+	{
+		// 종료 정리가 새 재생성 예약으로 이어지지 않게 먼저 구독을 해제합니다.
+		SpawnedItem->OnDestroyed.RemoveDynamic(this, &ThisClass::OnItemDestroyed);
+		SpawnedItem->Destroy();
+		SpawnedItem = nullptr;
 	}
 }
 
@@ -46,6 +65,12 @@ void ACXItemSpawner::SpawnItem()
 	if (World == nullptr || ItemClass == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[ItemSpawner] Missing world or ItemClass: %s"), *GetName());
+		return;
+	}
+
+	const ACXGameState* MatchState = World->GetGameState<ACXGameState>();
+	if (IsValid(MatchState) == false || MatchState->IsMatchPlaying() == false)
+	{
 		return;
 	}
 
@@ -72,20 +97,18 @@ void ACXItemSpawner::OnItemDestroyed(AActor* DestroyedActor)
 
 	// 반복 타이머가 아니라, 매번 아이템이 사라질 때 한 번씩 예약합니다.
 	SpawnedItem = nullptr;
+	const ACXGameState* MatchState = GetWorld()->GetGameState<ACXGameState>();
+	if (IsValid(MatchState) == false || MatchState->IsMatchPlaying() == false)
+	{
+		return;
+	}
 	GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &ThisClass::SpawnItem,
 		FMath::Max(SpawnInterval, 0.01f), false);
 }
 
 void ACXItemSpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 종료 후 재생성하지 않도록 예약과 구독을 해제한 뒤 남은 아이템을 정리합니다.
-	GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
-	if (HasAuthority() && IsValid(SpawnedItem))
-	{
-		SpawnedItem->OnDestroyed.RemoveDynamic(this, &ThisClass::OnItemDestroyed);
-		SpawnedItem->Destroy();
-		SpawnedItem = nullptr;
-	}
+	StopSpawning();
 
 	Super::EndPlay(EndPlayReason);
 }

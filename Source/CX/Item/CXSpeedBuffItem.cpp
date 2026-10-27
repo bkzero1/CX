@@ -5,6 +5,8 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/Material.h"
 #include "CXPawn.h"
+#include "GameState/CXGameState.h"
+#include "Engine/World.h"
 #include "PlayerState/CXPlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
@@ -83,6 +85,13 @@ void ACXSpeedBuffItem::OnOverlapSphereBeginOverlap(UPrimitiveComponent* Overlapp
 	bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (HasAuthority() == false || bCollected)
+	{
+		return;
+	}
+
+	// 직접 배치한 아이템도 경기 중에만 지급·연출·제거합니다.
+	const ACXGameState* MatchState = GetWorld()->GetGameState<ACXGameState>();
+	if (IsValid(MatchState) == false || MatchState->IsMatchPlaying() == false)
 	{
 		return;
 	}

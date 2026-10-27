@@ -15,6 +15,9 @@ class CX_API ACXItemSpawner : public AActor
 public:
 	ACXItemSpawner();
 
+	void StartSpawning();
+	void StopSpawning();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

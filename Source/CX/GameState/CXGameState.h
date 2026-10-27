@@ -26,6 +26,8 @@ class CX_API ACXGameState : public AGameStateBase
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	bool IsMatchPlaying() const { return CurrentGameState == EGameState::Playing; }
+
 	bool IsMatchFinished() const { return CurrentGameState == EGameState::Finished; }
 
 	int32 GetRemainingTime() const { return RemainingTime; }
