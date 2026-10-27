@@ -36,6 +36,7 @@ void ACXGameMode::PostLogin(APlayerController* NewPlayer)
 void ACXGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	GetWorldTimerManager().ClearTimer(GameTimerHandle);
+	GetWorldTimerManager().ClearTimer(RestartTimerHandle);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -113,13 +114,49 @@ void ACXGameMode::FinishGame()
 {
 	GetWorldTimerManager().ClearTimer(GameTimerHandle);
 	ACXGameState* CXGameState = GetGameState<ACXGameState>();
-	if (IsValid(CXGameState))
+	if (IsValid(CXGameState) == false)
 	{
-		// 이번 단계는 종료 상태까지만 연결하고, 승자 계산은 다음에 추가합니다.
-		CXGameState->SetRemainingTime(0);
-		CXGameState->SetGameState(EGameState::Finished);
-		UE_LOG(LogCXCountdown, Log, TEXT("[Countdown] Finished"));
+		UE_LOG(LogCXCountdown, Error, TEXT("Cannot determine winners: CXGameState is invalid."));
+		return;
 	}
+
+	// 코인은 0 이상이므로 -1부터 비교하면 0코인 플레이어도 후보가 됩니다.
+	int32 HighestCoins = -1;
+	TArray<TObjectPtr<ACXPlayerState>> MatchWinners;
+	for (APlayerState* PlayerState : CXGameState->PlayerArray)
+	{
+		ACXPlayerState* CXPlayerState = Cast<ACXPlayerState>(PlayerState);
+		if (IsValid(CXPlayerState) == false)
+		{
+			continue;
+		}
+
+		const int32 PlayerCoins = CXPlayerState->GetCoins();
+		if (PlayerCoins > HighestCoins)
+		{
+			// 더 높은 점수가 나오면 이전 후보들은 더 이상 최고점이 아닙니다.
+			HighestCoins = PlayerCoins;
+			MatchWinners.Empty();
+			MatchWinners.Add(CXPlayerState);
+		}
+		else if (PlayerCoins == HighestCoins)
+		{
+			// 현재 최고점과 같으면 기존 후보를 유지하며 공동 우승자로 추가합니다.
+			MatchWinners.Add(CXPlayerState);
+		}
+	}
+
+	CXGameState->SetWinners(MatchWinners);
+	CXGameState->SetRemainingTime(0);
+	CXGameState->SetGameState(EGameState::Finished);
+
+	// 서버 판정 확인용 로그입니다. 결과 UI는 다음 단계에서 연결합니다.
+	UE_LOG(LogCXCountdown, Log, TEXT("[MatchResult] HighestCoins=%d, WinnerCount=%d"), HighestCoins, MatchWinners.Num());
+	for (const TObjectPtr<ACXPlayerState>& Winner : MatchWinners)
+	{
+		UE_LOG(LogCXCountdown, Log, TEXT("[MatchResult] Winner=%s, Coins=%d"), *GetNameSafe(Winner.Get()), Winner->GetCoins());
+	}
+	UE_LOG(LogCXCountdown, Log, TEXT("[Countdown] Finished"));
 }
 
 AActor* ACXGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -168,4 +205,57 @@ bool ACXGameMode::IsPlayerStartAvailable(const APlayerStart* PlayerStart) const
 		);
 
 	return !bVehicleExists;
+}
+void ACXGameMode::RequestMatchRestart()
+{
+	ACXGameState* CXGameState = GetGameState<ACXGameState>();
+	if (HasAuthority() == false || IsValid(CXGameState) == false)
+	{
+		return;
+	}
+
+	// 경기 도중 요청과 이미 시작된 카운트다운의 재설정을 막습니다.
+	if (CXGameState->IsMatchFinished() == false || bRestartRequested)
+	{
+		return;
+	}
+
+	bRestartRequested = true;
+	CXGameState->SetRestartRemainingTime(5);
+	GetWorldTimerManager().SetTimer(RestartTimerHandle, this, &ACXGameMode::HandleRestartTimerTick, 1.0f, true);
+	UE_LOG(LogCXCountdown, Log, TEXT("[Restart] Starts in: 5"));
+}
+
+void ACXGameMode::HandleRestartTimerTick()
+{
+	ACXGameState* CXGameState = GetGameState<ACXGameState>();
+	if (IsValid(CXGameState) == false || CXGameState->IsMatchFinished() == false)
+	{
+		GetWorldTimerManager().ClearTimer(RestartTimerHandle);
+		bRestartRequested = false;
+		if (IsValid(CXGameState))
+		{
+			CXGameState->SetRestartRemainingTime(-1);
+		}
+		return;
+	}
+
+	const int32 NewRemainingTime = FMath::Max(0, CXGameState->GetRestartRemainingTime() - 1);
+	CXGameState->SetRestartRemainingTime(NewRemainingTime);
+	UE_LOG(LogCXCountdown, Log, TEXT("[Restart] Starts in: %d"), NewRemainingTime);
+	if (NewRemainingTime > 0)
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(RestartTimerHandle);
+	// 현재 맵을 모두 함께 다시 불러옵니다. PlayerState도 새로 만들어 자원을 초기화합니다.
+	// 새 GameMode의 PostLogin에서 기존 시작 대기 5초가 다시 진행됩니다.
+	if (GetWorld()->ServerTravel(TEXT("?Restart?NoSeamlessTravel")) == false)
+	{
+		// 이동 요청이 거절되면 다시 버튼을 눌러 요청할 수 있도록 풀어줍니다.
+		bRestartRequested = false;
+		CXGameState->SetRestartRemainingTime(-1);
+		UE_LOG(LogCXCountdown, Error, TEXT("[Restart] ServerTravel request was rejected."));
+	}
 }

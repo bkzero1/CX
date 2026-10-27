@@ -2,6 +2,7 @@
 
 
 #include "CXPlayerController.h"
+#include "CXGameMode.h"
 #include "CXPawn.h"
 #include "CXUI.h"
 #include "EnhancedInputSubsystems.h"
@@ -9,6 +10,20 @@
 #include "Net/UnrealNetwork.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerState.h"
+#include "GameState/CXGameState.h"
+#include "Blueprint/UserWidget.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Engine/World.h"
+
+ACXPlayerController::ACXPlayerController()
+{
+	// 기본 결과 화면을 연결하며, 파생 BP에서 다른 위젯으로 바꿀 수 있습니다.
+	static ConstructorHelpers::FClassFinder<UUserWidget> ResultWidgetAsset(TEXT("/Game/UI/WBP_MatchResult"));
+	if (ResultWidgetAsset.Succeeded())
+	{
+		MatchResultWidgetClass = ResultWidgetAsset.Class;
+	}
+}
 
 void ACXPlayerController::BeginPlay()
 {
@@ -19,12 +34,23 @@ void ACXPlayerController::BeginPlay()
 		return;
 	}
 	
+	// 이전 경기의 UI 전용 입력을 새 경기의 게임 입력으로 되돌립니다.
+	SetInputMode(FInputModeGameOnly());
+	bShowMouseCursor = false;
+
 	// spawn the UI widget and add it to the viewport
 	VehicleUI = CreateWidget<UCXUI>(this, VehicleUIClass);
 
 	check(VehicleUI);
 
 	VehicleUI->AddToViewport();
+
+	// 종료 상태를 먼저 받은 뒤 이 컨트롤러가 시작된 경우도 처리합니다.
+	const ACXGameState* CXGameState = GetWorld()->GetGameState<ACXGameState>();
+	if (IsValid(CXGameState) && CXGameState->IsMatchFinished())
+	{
+		ShowMatchResult();
+	}
 }
 
 void ACXPlayerController::SetupInputComponent()
@@ -96,4 +122,65 @@ void ACXPlayerController::STC_ChatMessage_Implementation(const FString& Sender, 
 	// 수신 내용을 로그로 확인하고, 이 플레이어의 HUD에도 전달합니다.
 	UE_LOG(LogTemp, Log, TEXT("Client received chat: %s: %s"), *Sender, *Message);
 	VehicleUI->OnNewChatMessage(Sender, Message);
+}
+
+void ACXPlayerController::ShowMatchResult()
+{
+	// 서버의 원격 컨트롤러에서는 만들지 않고, 중복 생성도 막습니다.
+	if (IsLocalController() == false || IsValid(MatchResultWidget))
+	{
+		return;
+	}
+	if (MatchResultWidgetClass == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("MatchResultWidgetClass is not configured."));
+		return;
+	}
+
+	// this를 Owning Player로 전달하여 위젯이 자기 PlayerState를 찾도록 합니다.
+	MatchResultWidget = CreateWidget<UUserWidget>(this, MatchResultWidgetClass);
+	if (IsValid(MatchResultWidget) == false)
+	{
+		return;
+	}
+	MatchResultWidget->AddToViewport(100);
+
+	FInputModeUIOnly InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+}
+
+void ACXPlayerController::RequestMatchRestart()
+{
+	if (IsLocalController())
+	{
+		CTS_RequestMatchRestart();
+	}
+}
+
+void ACXPlayerController::CTS_RequestMatchRestart_Implementation()
+{
+	// GameMode는 서버에만 있으므로 RPC로 서버에 도착한 뒤 찾습니다.
+	ACXGameMode* CXGameMode = GetWorld()->GetAuthGameMode<ACXGameMode>();
+	if (IsValid(CXGameMode))
+	{
+		CXGameMode->RequestMatchRestart();
+	}
+}
+
+void ACXPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 맵을 떠날 때 이 컨트롤러가 만든 화면을 정리합니다.
+	if (IsValid(MatchResultWidget))
+	{
+		MatchResultWidget->RemoveFromParent();
+		MatchResultWidget = nullptr;
+	}
+	if (IsValid(VehicleUI))
+	{
+		VehicleUI->RemoveFromParent();
+		VehicleUI = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
 }

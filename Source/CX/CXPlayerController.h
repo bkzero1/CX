@@ -9,6 +9,7 @@
 class UInputMappingContext;
 class ACXPawn;
 class UCXUI;
+class UUserWidget;
 
 /**
  *  Vehicle Player Controller class
@@ -18,6 +19,24 @@ UCLASS(abstract)
 class CX_API ACXPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+public:
+	ACXPlayerController();
+	void ShowMatchResult();
+
+	// 결과 위젯의 버튼이 자기 컨트롤러를 통해 서버에 재시작을 요청합니다.
+	UFUNCTION(BlueprintCallable, Category = "Match")
+	void RequestMatchRestart();
+
+protected:
+	UFUNCTION(Server, Reliable)
+	void CTS_RequestMatchRestart();
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UUserWidget> MatchResultWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> MatchResultWidget;
 
 	// 채팅 위젯에서 protected RPC를 호출할 수 있도록 허용합니다.
 	friend class UChatUI;
@@ -55,6 +74,7 @@ protected:
 	TSubclassOf<UCXUI> VehicleUIClass;
 
 	/** Pointer to the UI widget */
+	UPROPERTY(Transient)
 	TObjectPtr<UCXUI> VehicleUI;
 
 	
@@ -63,6 +83,7 @@ protected:
 protected:
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
