@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -6,6 +6,7 @@
 #include "WheeledVehiclePawn.h"
 #include "CXPawn.generated.h"
 
+class UArrowComponent;
 class UCameraComponent;
 class USpringArmComponent;
 class UInputAction;
@@ -80,6 +81,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
 	UInputAction* AttackAction = nullptr;
 
+	// 차량 BP에서 위치와 회전을 조절하는 공격 기준점입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attack")
+	TObjectPtr<UArrowComponent> AttackOrigin;
+
+	// 직선 판정과 별개로, 표시용 선의 시작점을 들어 올리는 높이(cm)입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack|Effects", meta = (ClampMin = "0.0", Units = "cm"))
+	float AttackArcHeight = 120.0f;
+
 	/** Keeps track of which camera is active */
 	bool bFrontCameraActive = false;
 
@@ -141,7 +150,7 @@ protected:
 
 	// 서버가 판정한 공격 경로를 각 화면에 표시합니다.
 	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastHitEffect(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal);
+	void MulticastHitEffect(const FVector& TraceStart, const FVector& TraceEnd, bool bBlockingHit, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal);
 
 	/** Called when the brake lights are turned on or off */
 	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")

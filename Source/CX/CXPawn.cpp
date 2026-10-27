@@ -1,6 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "CXPawn.h"
+#include "Components/ArrowComponent.h"
 #include "CXWheelFront.h"
 #include "CXWheelRear.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -25,6 +26,14 @@ DEFINE_LOG_CATEGORY(LogTemplateVehicle);
 
 ACXPawn::ACXPawn()
 {
+	// 차체를 따라가는 공격 기준점. 화살표는 에디터에서만 보입니다.
+	AttackOrigin = CreateDefaultSubobject<UArrowComponent>(TEXT("AttackOrigin"));
+	AttackOrigin->SetupAttachment(GetMesh());
+	AttackOrigin->SetRelativeLocation(FVector(250.0f, 0.0f, 50.0f));
+	AttackOrigin->SetRelativeRotation(FRotator::ZeroRotator);
+	AttackOrigin->SetHiddenInGame(true);
+	AttackOrigin->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	// 모든 차량이 같은 공격 액션을 사용하도록 코드에서 연결합니다.
 	static ConstructorHelpers::FObjectFinder<UInputAction> AttackActionAsset(
 		TEXT("/Game/VehicleTemplate/Input/Actions/IA_Attack.IA_Attack"));
@@ -110,10 +119,9 @@ void ACXPawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputCompon
 		// reset the vehicle 
 		EnhancedInputComponent->BindAction(ResetVehicleAction, ETriggerEvent::Triggered, this, &ACXPawn::ResetVehicle);
 
-		// 라이브 세션과 같은 Triggered 연결입니다.
 		if (IsValid(AttackAction))
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &ACXPawn::InputAttack);
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &ACXPawn::InputAttack);
 		}
 		else
 		{
@@ -286,10 +294,9 @@ void ACXPawn::InputAttack(const FInputActionValue& Value)
 
 void ACXPawn::CTSAttack_Implementation()
 {
-	// 라이브 세션의 첫 검증 단계: 액터 위치에서 전방 700cm를 검사합니다.
-	// 제출 전에는 시작점을 앞 범퍼 중앙으로 조정합니다.
-	const FVector Start = GetActorLocation();
-	const FVector End = Start + GetActorForwardVector() * 700.0f;
+	// 서버에 있는 기준점의 위치와 앞 방향으로 공격을 판정합니다.
+	const FVector Start = AttackOrigin->GetComponentLocation();
+	const FVector End = Start + AttackOrigin->GetForwardVector() * 700.0f;
 
 	// 자기 차량을 맞히지 않도록 검사 대상에서 제외합니다.
 	FCollisionQueryParams Params;
@@ -298,7 +305,8 @@ void ACXPawn::CTSAttack_Implementation()
 	// 벽 명중과 차량 명중을 구분합니다. 코인 이전 성공 여부와는 별개입니다.
 	bool bHitVehicle = false;
 	FHitResult HitResult;
-	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
+	const bool bBlockingHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
+	if (bBlockingHit)
 	{
 		// 명중 로그는 벽에도 남기되, 데미지는 차량에만 전달합니다.
 		UE_LOG(LogTemplateVehicle, Log, TEXT("[AttackHit][Server] %s -> %s"),
@@ -313,13 +321,40 @@ void ACXPawn::CTSAttack_Implementation()
 	}
 
 	// 빗나갔을 때도 공격 경로를 확인할 수 있도록 명중 조건 밖에서 호출합니다.
-	MulticastHitEffect(Start, End, bHitVehicle, HitResult.ImpactPoint, HitResult.ImpactNormal);
+	MulticastHitEffect(Start, End, bBlockingHit, bHitVehicle, HitResult.ImpactPoint, HitResult.ImpactNormal);
 }
 
-void ACXPawn::MulticastHitEffect_Implementation(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal)
+void ACXPawn::MulticastHitEffect_Implementation(const FVector& TraceStart, const FVector& TraceEnd, bool bBlockingHit, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal)
 {
-	// 라이브 세션과 동일: 빨간색, 영구 표시 안 함, 1초 유지, 깊이 0, 두께 3.
-	DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Red, false, 1.0f, 0, 3.0f);
+	// 서버는 표시하지 않습니다. 각 클라이언트는 서버가 보낸 판정 결과로만 그립니다.
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	// 명중하면 충돌점까지, 빗나가면 사거리 끝까지 표시합니다. 실제 판정은 여전히 직선입니다.
+	const FVector VisualEnd = bBlockingHit ? ImpactPoint : TraceEnd;
+	constexpr int32 SegmentCount = 20;
+	constexpr float DisplayTime = 1.0f;
+	FVector PreviousPoint = TraceStart;
+	PreviousPoint.Z += AttackArcHeight;
+
+	// 시작점은 높게, 끝점은 실제 충돌점에 둡니다. 끝으로 갈수록 높이 변화가 완만해집니다.
+	for (int32 SegmentIndex = 1; SegmentIndex <= SegmentCount; ++SegmentIndex)
+	{
+		const float Alpha = static_cast<float>(SegmentIndex) / SegmentCount;
+		FVector CurrentPoint = FMath::Lerp(TraceStart, VisualEnd, Alpha);
+		CurrentPoint.Z += AttackArcHeight * (1.0f - Alpha) * (1.0f - Alpha);
+
+		DrawDebugLine(GetWorld(), PreviousPoint, CurrentPoint, FColor::Red, false, DisplayTime, 0, 3.0f);
+		PreviousPoint = CurrentPoint;
+	}
+
+	// 벽과 차량 모두 실제 충돌점에 반지름 8cm의 구를 표시합니다. 빗나가면 생략합니다.
+	if (bBlockingHit)
+	{
+		DrawDebugSphere(GetWorld(), ImpactPoint, 8.0f, 12, FColor::Yellow, false, DisplayTime, 0, 2.0f);
+	}
 
 	// 선은 항상 표시하지만 파티클은 차량을 맞혔을 때만 재생합니다.
 	if (bHitVehicle == false)
