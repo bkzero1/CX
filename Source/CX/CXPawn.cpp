@@ -26,6 +26,9 @@ DEFINE_LOG_CATEGORY(LogTemplateVehicle);
 
 ACXPawn::ACXPawn()
 {
+	// 차량 물리 보정의 기본 방식이며, BP 클래스 디폴트에서 변경할 수 있습니다.
+	SetPhysicsReplicationMode(EPhysicsReplicationMode::PredictiveInterpolation);
+
 	// 차체를 따라가는 공격 기준점. 화살표는 에디터에서만 보입니다.
 	AttackOrigin = CreateDefaultSubobject<UArrowComponent>(TEXT("AttackOrigin"));
 	AttackOrigin->SetupAttachment(GetMesh());
