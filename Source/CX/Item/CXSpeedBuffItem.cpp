@@ -22,7 +22,7 @@ ACXSpeedBuffItem::ACXSpeedBuffItem()
 	}
 
 	static ConstructorHelpers::FObjectFinder<USoundBase> PickupSoundAsset(
-		TEXT("/Engine/VREditor/Sounds/UI/Camera_Shutter.Camera_Shutter"));
+		TEXT("/Engine/VREditor/Sounds/UI/Click_on_Button.Click_on_Button"));
 	if (PickupSoundAsset.Succeeded())
 	{
 		PickupSound = PickupSoundAsset.Object;
