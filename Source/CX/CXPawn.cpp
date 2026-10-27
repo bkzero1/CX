@@ -10,10 +10,12 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "InputAction.h"
+#include "Particles/ParticleSystem.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
 #include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 #include "PlayerState/CXPlayerState.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 
@@ -29,6 +31,14 @@ ACXPawn::ACXPawn()
 	if (AttackActionAsset.Succeeded())
 	{
 		AttackAction = AttackActionAsset.Object;
+	}
+
+	// 기본 명중 효과를 제공하며, 차량 BP에서 다른 에셋으로 변경할 수 있습니다.
+	static ConstructorHelpers::FObjectFinder<UParticleSystem> HitParticleAsset(
+		TEXT("/Game/StarterContent/Particles/P_Explosion.P_Explosion"));
+	if (HitParticleAsset.Succeeded())
+	{
+		HitParticle = HitParticleAsset.Object;
 	}
 
 	// construct the front camera boom
@@ -285,6 +295,8 @@ void ACXPawn::CTSAttack_Implementation()
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
 
+	// 벽 명중과 차량 명중을 구분합니다. 코인 이전 성공 여부와는 별개입니다.
+	bool bHitVehicle = false;
 	FHitResult HitResult;
 	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
 	{
@@ -294,10 +306,29 @@ void ACXPawn::CTSAttack_Implementation()
 
 		if (ACXPawn* Victim = Cast<ACXPawn>(HitResult.GetActor()))
 		{
+			bHitVehicle = true;
 			// 피해 차량, 코인 5개에 해당하는 데미지, 공격자 컨트롤러, 공격 차량.
 			UGameplayStatics::ApplyDamage(Victim, 5.0f, GetController(), this, nullptr);
 		}
 	}
+
+	// 빗나갔을 때도 공격 경로를 확인할 수 있도록 명중 조건 밖에서 호출합니다.
+	MulticastHitEffect(Start, End, bHitVehicle, HitResult.ImpactPoint, HitResult.ImpactNormal);
+}
+
+void ACXPawn::MulticastHitEffect_Implementation(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal)
+{
+	// 라이브 세션과 동일: 빨간색, 영구 표시 안 함, 1초 유지, 깊이 0, 두께 3.
+	DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Red, false, 1.0f, 0, 3.0f);
+
+	// 선은 항상 표시하지만 파티클은 차량을 맞혔을 때만 재생합니다.
+	if (bHitVehicle == false)
+	{
+		return;
+	}
+
+	// 충돌 위치에 효과를 만들고, 충돌 표면의 수직 방향으로 회전시킵니다.
+	UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitParticle, ImpactPoint, ImpactNormal.Rotation(), FVector(2.0f));
 }
 
 #undef LOCTEXT_NAMESPACE

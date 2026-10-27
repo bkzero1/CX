@@ -9,6 +9,7 @@
 class UCameraComponent;
 class USpringArmComponent;
 class UInputAction;
+class UParticleSystem;
 class UChaosWheeledVehicleMovementComponent;
 struct FInputActionValue;
 
@@ -82,6 +83,10 @@ protected:
 	/** Keeps track of which camera is active */
 	bool bFrontCameraActive = false;
 
+	// 차량 BP에서 지정하며, 차량에 명중했을 때 재생할 효과 에셋입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Effects)
+	UParticleSystem* HitParticle = nullptr;
+
 public:
 	ACXPawn();
 
@@ -133,6 +138,10 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void CTSAttack();
+
+	// 서버가 판정한 공격 경로를 각 화면에 표시합니다.
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastHitEffect(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal);
 
 	/** Called when the brake lights are turned on or off */
 	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
