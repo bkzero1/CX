@@ -2,6 +2,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/RotatingMovementComponent.h"
 #include "Engine/StaticMesh.h"
 #include "CXPawn.h"
 #include "GameState/CXGameState.h"
@@ -51,6 +52,13 @@ ACXCoinItem::ACXCoinItem()
 	ItemMesh->SetupAttachment(SceneRoot);
 	ItemMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+	// 액터 Tick 대신 컴포넌트가 회전을 담당합니다. 기본은 4초에 한 바퀴입니다.
+	RotatingMovement = CreateDefaultSubobject<URotatingMovementComponent>(TEXT("RotatingMovement"));
+	RotatingMovement->RotationRate = FRotator(0.0f, 90.0f, 0.0f);
+	RotatingMovement->bRotationInLocalSpace = true;
+	RotatingMovement->bAutoRegisterUpdatedComponent = false;
+	RotatingMovement->PrimaryComponentTick.bAllowTickOnDedicatedServer = false;
+
 	// 라이브 세션의 물음표 메시를 기본 외형으로 사용합니다.
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> ItemMeshAsset(
 		TEXT("/Engine/EditorMeshes/EditorHelp.EditorHelp"));
@@ -63,6 +71,10 @@ ACXCoinItem::ACXCoinItem()
 void ACXCoinItem::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 메시만 회전시킵니다. 루트와 획득 판정용 구는 제자리에 둡니다.
+	RotatingMovement->SetUpdatedComponent(ItemMesh);
+
 
 	// 획득 판정과 코인 변경은 서버에서만 실행합니다.
 	if (HasAuthority())

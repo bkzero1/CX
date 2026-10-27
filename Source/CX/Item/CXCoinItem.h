@@ -10,6 +10,7 @@ class UStaticMeshComponent;
 class UPrimitiveComponent;
 class UParticleSystem;
 class USoundBase;
+class URotatingMovementComponent;
 
 UCLASS()
 class CX_API ACXCoinItem : public AActor
@@ -39,6 +40,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coin")
 	TObjectPtr<UStaticMeshComponent> ItemMesh;
+
+	// 회전 속도와 축은 BP의 이 컴포넌트에서 조절할 수 있습니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coin")
+	TObjectPtr<URotatingMovementComponent> RotatingMovement;
 
 	// C++ 기본값을 사용하며, BP에서 획득 파티클과 소리를 교체할 수 있습니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coin")
