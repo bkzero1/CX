@@ -95,6 +95,9 @@ public:
 
 	virtual void Tick(float Delta) override;
 
+	// 피해 차량에서 서버가 코인 이전을 처리합니다.
+	virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+
 	// End Actor interface
 
 protected:

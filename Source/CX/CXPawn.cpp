@@ -13,6 +13,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
+#include "Kismet/GameplayStatics.h"
+#include "PlayerState/CXPlayerState.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
@@ -127,6 +129,47 @@ void ACXPawn::Tick(float Delta)
 	CameraYaw = FMath::FInterpTo(CameraYaw, 0.0f, Delta, 1.0f);
 
 	BackSpringArm->SetRelativeRotation(FRotator(0.0f, CameraYaw, 0.0f));
+}
+
+float ACXPawn::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	// 이 함수의 this는 맞은 차량입니다. 코인은 서버에서만 변경합니다.
+	ACXPawn* Attacker = Cast<ACXPawn>(DamageCauser);
+	if (HasAuthority() == false || IsValid(Attacker) == false || Attacker == this)
+	{
+		return 0.0f;
+	}
+
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	if (ActualDamage <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	// 양쪽 정보를 먼저 확인하여, 받을 사람이 없는 상태에서 차감하지 않습니다.
+	ACXPlayerState* VictimPlayerState = GetPlayerState<ACXPlayerState>();
+	ACXPlayerState* AttackerPlayerState = Attacker->GetPlayerState<ACXPlayerState>();
+	if (IsValid(VictimPlayerState) == false || IsValid(AttackerPlayerState) == false)
+	{
+		return 0.0f;
+	}
+
+	// 라이브 세션처럼 실제 데미지를 코인 수로 사용합니다. 공격에서는 5.0f를 전달합니다.
+	const int32 TransferCoinAmount = static_cast<int32>(ActualDamage);
+	if (VictimPlayerState->TryRemoveCoins(TransferCoinAmount) == false)
+	{
+		UE_LOG(LogTemplateVehicle, Log, TEXT("[CoinTransfer][Server] Not enough coins: %s (Coins=%d, Required=%d)"),
+			*GetNameSafe(VictimPlayerState), VictimPlayerState->GetCoins(), TransferCoinAmount);
+		return 0.0f;
+	}
+
+	// 차감에 성공했을 때만 같은 수량을 공격자에게 지급합니다.
+	AttackerPlayerState->AddCoins(TransferCoinAmount);
+	UE_LOG(LogTemplateVehicle, Log, TEXT("[CoinTransfer][Server] %s -> %s : %d (Victim=%d, Attacker=%d)"),
+		*GetNameSafe(VictimPlayerState), *GetNameSafe(AttackerPlayerState), TransferCoinAmount,
+		VictimPlayerState->GetCoins(), AttackerPlayerState->GetCoins());
+
+	return ActualDamage;
 }
 
 void ACXPawn::Steering(const FInputActionValue& Value)
@@ -245,9 +288,15 @@ void ACXPawn::CTSAttack_Implementation()
 	FHitResult HitResult;
 	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
 	{
-		// 아직 코인은 변경하지 않고, 서버가 찾은 명중 대상만 기록합니다.
+		// 명중 로그는 벽에도 남기되, 데미지는 차량에만 전달합니다.
 		UE_LOG(LogTemplateVehicle, Log, TEXT("[AttackHit][Server] %s -> %s"),
 			*GetName(), *GetNameSafe(HitResult.GetActor()));
+
+		if (ACXPawn* Victim = Cast<ACXPawn>(HitResult.GetActor()))
+		{
+			// 피해 차량, 코인 5개에 해당하는 데미지, 공격자 컨트롤러, 공격 차량.
+			UGameplayStatics::ApplyDamage(Victim, 5.0f, GetController(), this, nullptr);
+		}
 	}
 }
 
